@@ -1,6 +1,9 @@
 # dshell
 Decentralized distribution browser action framework, build-in P2P network and IPFS storage.
 
+# Install
+`npm install dshell`
+
 # Build
 `dshell` writen under `esm` module system, but the dependency part current not support `emm`.
 
