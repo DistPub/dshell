@@ -1,6 +1,6 @@
 {
   "name": "dshell",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Decentralized distribution browser action framework, build-in P2P network and IPFS storage.",
   "keywords": [
     "dshell",
@@ -10,6 +10,7 @@
   ],
   "bugs": "https://github.com/DistPub/dshell/issues",
   "main": "index.js",
+  "files": ["*"],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build-dep": "node browserify.js>dep.bundle.min.js"
@@ -21,7 +22,7 @@
   "author": "Smite Chow",
   "license": "MIT",
   "engines": {
-    "node": "13.2.0"
+    "node": ">=13.2.0"
   },
   "devDependencies": {
     "browserify": "^17.0.0",
