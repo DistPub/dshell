@@ -98,10 +98,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     'https://cdn.jsdelivr.net/npm/dshell/actions/utils.js',
     'https://cdn.jsdelivr.net/npm/dshell/actions/soul.js',
   );
+  shell.installExternalAction(function Add(_, a, b) {
+    return a + b
+  });
   await my.awake();
 });
 ```
 
+Try
+
+```
+response = await shell.exec(shell.Action
+    .zipArray([Array(10).fill(1), Array(10).fill(2)]) // => [[1, 2], ...]
+    .Add.PCollect // => [3, ...]
+    .Map // => 3
+    .Echo // => "3"
+    .Collect // => ["3", ...]
+    .zipArray([Array(10).fill(4)]) // => [[4, "3"]]
+    .buildExcel(['data', ['number', 'add result']]) // => blob file
+    .download(['demo.xlsx']) // trigger download
+    .pushFile(['/tmp/demo.xlsx']) // upload to IPFS storage
+    .PreviewOffice) // preview online
+```
 # API
 
 todo
