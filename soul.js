@@ -1,6 +1,6 @@
 import dayjs from 'https://cdn.jsdelivr.net/npm/dayjs@1.9.6/esm/index.js/+esm'
 import { log } from './utils.js'
-import { IPFS, datastoreLevel, events, cids, uint8ArrayConcat } from "./dep.js"
+import { IPFS, datastoreLevel, events, cids, uint8ArrayConcat, Mutex } from "./dep.js"
 
 class Soul extends events.EventEmitter {
   constructor(db, username) {
@@ -9,6 +9,7 @@ class Soul extends events.EventEmitter {
     this.db = db
     this.experiences = []
     this.pre = null
+    this.lock = new Mutex()
   }
 
   async init(optionFilter=item=>item) {
@@ -28,6 +29,37 @@ class Soul extends events.EventEmitter {
     shell.on('action:response', data => this.handleExperience(data))
   }
 
+  async operateExperiences(experiences) {
+    const release = await this.lock.acquire()
+    try {
+      const experiences = [...this.experiences]
+
+      if (experiences) {
+        if (experiences instanceof Array) {
+          this.experiences = this.experiences.concat(experiences)
+        } else {
+          this.experiences.push(experiences)
+        }
+      } else {
+        this.experiences = []
+      }
+      await this.db.put('experiences', this.experiences.map(item => item.toString()))
+      return experiences
+    } finally {
+      release()
+    }
+  }
+
+  async operatePre(pre) {
+    const release = await this.lock.acquire()
+    try {
+      this.pre = pre
+      await this.db.put('pre', this.pre.toString())
+    } finally {
+      release()
+    }
+  }
+
   async handleExperience(data) {
     let cid
 
@@ -42,20 +74,16 @@ class Soul extends events.EventEmitter {
         throw error
       }
     }
-
-    this.experiences.push(cid)
-    await this.db.put('experiences', this.experiences.map(item => item.toString()));
+    await this.operateExperiences(cid)
   }
 
   async summarize() {
     if (!this.experiences.length) {
       return
     }
-    const cid = await this.node.dag.put({ experiences: this.experiences, pre: this.pre })
-    this.experiences = []
-    await this.db.put('experiences', []);
-    this.pre = cid
-    await this.db.put('pre', this.pre.toString());
+    const experiences = await this.operateExperiences(null, true)
+    const cid = await this.node.dag.put({ experiences: experiences, pre: this.pre })
+    await this.operatePre(cid)
   }
 
   async remember() {
@@ -113,8 +141,7 @@ class Soul extends events.EventEmitter {
       deep ++
     } while (deep <= 0 || recursive)
     experiences.map(async item => this.emit('empathy', (await this.node.dag.get(item)).value))
-    this.experiences = this.experiences.concat(experiences)
-    await this.db.put('experiences', this.experiences.map(item => item.toString()));
+    await this.operateExperiences(experiences)
   }
 
   async resetMemory(root) {

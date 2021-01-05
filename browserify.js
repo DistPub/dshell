@@ -16,6 +16,7 @@ const deps = [
   'xlsx',
   'ipfs-core',
   'msgpack-lite',
+  'async-mutex',
 ]
 deps.forEach(item => {
   browserify = browserify.require(item)

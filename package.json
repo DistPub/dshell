@@ -10,7 +10,9 @@
   ],
   "bugs": "https://github.com/DistPub/dshell/issues",
   "main": "index.js",
-  "files": ["*"],
+  "files": [
+    "*"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build-dep": "node browserify.js>dep.bundle.min.js"
@@ -25,6 +27,7 @@
     "node": ">=13.2.0"
   },
   "devDependencies": {
+    "async-mutex": "^0.2.6",
     "browserify": "^17.0.0",
     "cids": "^1.0.2",
     "datastore-level": "^2.0.0",
