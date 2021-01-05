@@ -32,7 +32,7 @@ class Soul extends events.EventEmitter {
   async operateExperiences(experiences) {
     const release = await this.lock.acquire()
     try {
-      const experiences = [...this.experiences]
+      const old = [...this.experiences]
 
       if (experiences) {
         if (experiences instanceof Array) {
@@ -44,7 +44,7 @@ class Soul extends events.EventEmitter {
         this.experiences = []
       }
       await this.db.put('experiences', this.experiences.map(item => item.toString()))
-      return experiences
+      return old
     } finally {
       release()
     }
