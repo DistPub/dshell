@@ -1,6 +1,6 @@
 {
   "name": "dshell",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Decentralized distribution browser action framework, build-in P2P network and IPFS storage.",
   "keywords": [
     "dshell",
