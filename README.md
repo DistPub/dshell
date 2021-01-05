@@ -5,7 +5,7 @@ Decentralized distribution browser action framework, build-in P2P network and IP
 `npm install dshell`
 
 # Build
-`dshell` writen under `esm` module system, but the dependency part current not support `emm`.
+`dshell` writen under `esm` module system, but the dependency part current not support `esm`.
 
 Run `npm run build-dep` to generate `dep.bundle.min.js` file.
 
