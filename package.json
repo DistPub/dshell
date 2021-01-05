@@ -1,0 +1,47 @@
+{
+  "name": "dshell",
+  "version": "1.0.0",
+  "description": "Decentralized distribution browser action framework, build-in P2P network and IPFS storage.",
+  "keywords": [
+    "dshell",
+    "action",
+    "P2P",
+    "IPFS"
+  ],
+  "bugs": "https://github.com/DistPub/dshell/issues",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build-dep": "node browserify.js>dep.bundle.min.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DistPub/dshell.git"
+  },
+  "author": "Smite Chow",
+  "license": "MIT",
+  "engines": {
+    "node": "13.2.0"
+  },
+  "devDependencies": {
+    "browserify": "^17.0.0",
+    "cids": "^1.0.2",
+    "datastore-level": "^2.0.0",
+    "ipfs-core": "^0.3.1",
+    "it-pipe": "^1.1.0",
+    "libp2p": "^0.29.4",
+    "libp2p-crypto": "^0.18.0",
+    "libp2p-mplex": "^0.10.1",
+    "libp2p-noise": "^2.0.1",
+    "libp2p-webrtc-star": "^0.20.3",
+    "lodash": "^4.17.20",
+    "msgpack-lite": "^0.1.26",
+    "peer-id": "^0.14.2",
+    "uglifyify": "^5.0.2",
+    "uint8arrays": "^2.0.5",
+    "xlsx": "^0.16.9"
+  },
+  "contributors": [
+    "Smite Chow <xiaopengyou2no1@gmail.com>"
+  ]
+}
