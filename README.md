@@ -5,11 +5,10 @@ Decentralized distribution browser action framework, build-in P2P network and IP
 `npm install dshell`
 
 # Build
-`dshell` writen under `esm` module system, but the dependency part current not support `esm`.
+NO NEED!
 
-Run `npm run build-dep` to generate `dep.bundle.min.js` file.
-
->In `nodejs` environment, no build step need.
+`dshell` writen under `esm` module system, but the dependency part current not support `esm`, 
+hence `dshell` contains pre-build(use browserify) `dep.bundle.min.js` file and port it to `esm` in `dep.js` file.
 
 # Usage
 
@@ -27,21 +26,21 @@ Then you can import in module script tag:
  
 ```
 <script type="module" about="main">
-  import { Shell, UserNode, Soul, datastoreLevel } from '/path/to/dshell/index.js';
-  
-  ...rest part code
+  import shell from '/path/to/dshell/dshell.js'
+  let response = await shell.exec({action: '/Ping'})
+  console.log(response.json()) // => 'pong'
 </script>
 
 or use cdn
 
 <script type="module" about="main">
-  import { Shell, UserNode, Soul, datastoreLevel } from 'https://cdn.jsdelivr.net/npm/dshell/index.min.js';
-  
-  ...rest part code
+  import shell from 'https://cdn.jsdelivr.net/npm/dshell/dshell.js'
+  let response = await shell.exec({action: '/Ping'})
+  console.log(response.json()) // => 'pong'
 </script>
 ```
 
-# Example
+# Custom Shell Example
 
 ```
 const username = 'demo';
@@ -51,7 +50,6 @@ const simplePeerOptions = { trickle: true };
 const my = new UserNode(db, username, country, simplePeerOptions);
 const soul = new Soul(db, username);
 const shell = new Shell(my, soul);
-window.dshell = shell;
 const peers = [];
 const intervalCache = {};
 
@@ -98,6 +96,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     'https://cdn.jsdelivr.net/npm/dshell/actions/utils.js',
     'https://cdn.jsdelivr.net/npm/dshell/actions/soul.js',
   );
+  
+  // add action should install before node awake
   shell.installExternalAction(function Add(_, a, b) {
     return a + b
   });
@@ -105,21 +105,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 ```
 
-Try
+Open your page in different PC(or just different Chrome User tabs for simulation), 
+then try remote call:
 
 ```
-response = await shell.exec(shell.Action
-    .zipArray([Array(10).fill(1), Array(10).fill(2)]) // => [[1, 2], ...]
-    .Add.PCollect // => [3, ...]
-    .Map // => 3
-    .Echo // => "3"
-    .Collect // => ["3", ...]
-    .zipArray([Array(10).fill(4)]) // => [[4, "3"]]
-    .buildExcel(['data', ['number', 'add result']]) // => blob file
-    .download(['demo.xlsx']) // trigger download
-    .pushFile(['/tmp/demo.xlsx']) // upload to IPFS storage
-    .PreviewOffice) // preview online
+const remote = peers[0] // select a peer id from `peers`
+await shell.exec(shell.action(true, {receivers: [remote]})
+  .zipArray([Array(10).fill(1), Array(10).fill(2)]) // => [[1, 2], ...]
+  .Add.PCollect // => [3, ...]
+  .Map // => 3
+  .Echo // => "3"
+  .Collect // => ["3", ...]
+  .zipArray([Array(10).fill(4)]) // => [[4, "3"]]
+  .buildExcel(['data', ['number', 'add result']]) // => blob file
+  .download({args:['demo.xlsx'], receivers: [my.id]}) // trigger download
+  .pushFile(['/tmp/demo.xlsx']) // upload to IPFS storage
+  .previewOffice({receivers: [my.id]})) // preview online
 ```
+
 # API
 
 todo
