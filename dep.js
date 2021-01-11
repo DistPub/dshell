@@ -14,4 +14,5 @@ const XLSX = require('xlsx')
 const IPFS = require('ipfs-core')
 const msgpack = require("msgpack-lite")
 const { Mutex } = require('async-mutex')
-export { Mutex, msgpack, PeerId, XLSX, IPFS, libp2pNoise, libp2pMplex, itPipe, datastoreLevel, libp2p, libp2pWebrtcStar, cryptoKeys, events, cids, cloneDeep, uint8ArrayConcat }
+const EventEmitter = require('eventemitter2')
+export { EventEmitter, Mutex, msgpack, PeerId, XLSX, IPFS, libp2pNoise, libp2pMplex, itPipe, datastoreLevel, libp2p, libp2pWebrtcStar, cryptoKeys, events, cids, cloneDeep, uint8ArrayConcat }

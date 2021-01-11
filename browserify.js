@@ -17,6 +17,7 @@ const deps = [
   'ipfs-core',
   'msgpack-lite',
   'async-mutex',
+  'eventemitter2',
 ]
 deps.forEach(item => {
   browserify = browserify.require(item)
