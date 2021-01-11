@@ -1,5 +1,5 @@
 import { map, collect } from 'https://cdn.jsdelivr.net/npm/streaming-iterables@5.0.3/dist/index.mjs'
-import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction } from './utils.js'
+import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction, generateUUID } from './utils.js'
 import { cloneDeep, msgpack, PeerId, libp2pNoise, libp2pMplex, itPipe, datastoreLevel, libp2p, libp2pWebrtcStar, cryptoKeys, events } from './dep.js'
 
 const transportClassName = libp2pWebrtcStar.prototype[Symbol.toStringTag]
@@ -114,7 +114,7 @@ class UserNode extends events.EventEmitter {
     })
   }
 
-  createProtocolHandler(action, soul, exec) {
+  createProtocolHandler(action, soul, exec, UUIDNameSpace) {
     return async ({ connection, stream, protocol }) => {
       const id = connection.remotePeer.toB58String()
       const [username, topic, meta, ...args] = await itPipe(
@@ -122,6 +122,10 @@ class UserNode extends events.EventEmitter {
         source => map(decode, source),
         collect
       )
+
+      if (!meta.uuid) {
+        meta.uuid = generateUUID(UUIDNameSpace)
+      }
 
       this.emit('handle:request', cloneDeep({
         username,

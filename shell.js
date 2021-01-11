@@ -1,16 +1,17 @@
-import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction } from "./utils.js"
+import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction, generateUUID } from "./utils.js"
 import { collect } from 'https://cdn.jsdelivr.net/npm/streaming-iterables@5.0.3/dist/index.mjs'
 import { ActionHelper, proxyHandler} from "./action-helper.js"
 import ActionResponse from './action-response.js'
-import { itPipe, events, cloneDeep } from "./dep.js"
+import { itPipe, EventEmitter, cloneDeep } from "./dep.js"
 
-class Shell extends events.EventEmitter{
+class Shell extends EventEmitter{
   constructor(userNode, soul) {
     super()
     this.soul = soul
     this.userNode = userNode
     this.addEventListener()
     this.soul.addEventListener(this)
+    this.UUIDNameSpace = generateUUID()
   }
 
   addEventListener() {
@@ -127,6 +128,10 @@ class Shell extends events.EventEmitter{
     const id = this.userNode.id
     const username = this.userNode.username
 
+    if (!meta.uuid) {
+      meta.uuid = generateUUID(this.UUIDNameSpace)
+    }
+
     if (!pipe) {
       this.emit('action:request', cloneDeep({
         topic,
@@ -222,7 +227,10 @@ class Shell extends events.EventEmitter{
   }
 
   installRemoteAction(protocol, action) {
-    this.userNode.installHandler(protocol, this.userNode.createProtocolHandler(action, this.soul, this.exec.bind(this)))
+    this.userNode.installHandler(
+      protocol,
+      this.userNode.createProtocolHandler(
+        action, this.soul, this.exec.bind(this), this.UUIDNameSpace))
   }
 
   /* built-in action */
@@ -379,6 +387,17 @@ class Shell extends events.EventEmitter{
     }
 
     return responses.map(item => item.payloads).reduce((a, b) => a.concat(b), [])
+  }
+
+  /**
+   * Fire event in current host
+   * @param _ - meta info
+   * @param event - event fired
+   * @param data - event data
+   * @returns {Promise.<void>}
+   */
+  actionFireEvent(_, event, data) {
+    this.emit(event, data)
   }
 
   /* action helper */
