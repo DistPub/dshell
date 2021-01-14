@@ -284,16 +284,20 @@ class Shell extends EventEmitter{
   /**
    * Exec action in pipe
    *
-   * @param _ - Meta data
+   * @param meta - Meta data
    * @param actions - Action array
    * @returns {Promise.<[ActionResponse]>} Action responses
    */
-  async actionPipeExec(_, ...actions) {
-    const execs = []
+  async actionPipeExec({meta}, ...actions) {
+    const commander = { host: this.userNode.id, uuid: meta.uuid }
+    const getStream = action => {
+      return action ? { host: action.receivers, uuid: action.meta.uuid } : {}
+    }
+    const execs = [[{ response: { results: { ignore: true } } }]]
     for (const [idx, action] of actions.entries()) {
-      if (idx === 0){
-        execs.push([{ response: { results: { ignore: true } } }])
-      }
+      action.meta.commander = commander
+      action.meta.upstream = getStream(actions[idx - 1])
+      action.meta.downstream = getStream(actions[idx + 1])
       execs.push(this.createPipeExecGenerator(this.ensureAction(action)))
     }
     execs.push(collect)
