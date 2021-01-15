@@ -69,9 +69,7 @@ class Shell extends EventEmitter{
           nextAction.args = nextAction.args.concat(preActionResults)
         }
 
-        for await (const item of this.execGenerator(nextAction, true)) {
-          yield item
-        }
+        yield* this.execGenerator(nextAction, true)
       }
     }
     return wrapper.bind(this)
@@ -99,9 +97,7 @@ class Shell extends EventEmitter{
     for (const receiver of receivers) {
       // self call
       if (receiver === id) {
-        for await (const item of this.applyAction(topic, action, args, pipe, meta)) {
-          yield item
-        }
+        yield* this.applyAction(topic, action, args, pipe, meta)
         continue
       }
 
@@ -384,9 +380,7 @@ class Shell extends EventEmitter{
    */
   async *actionMapArgs(_, ...args) {
     for (const iterable of args) {
-      for await (const item of iterable) {
-        yield item
-      }
+      yield* iterable
     }
   }
 
