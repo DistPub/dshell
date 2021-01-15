@@ -26,14 +26,28 @@ class UserNode extends events.EventEmitter {
     this.saveId()
   }
 
-  async pipe(messages, stream) {
-    return await itPipe(
+  async pipe(messages, stream, responseHandler, pipeEndHandler) {
+    await itPipe(
       messages,
       source => map(encode, source),
-      stream,
-      source => map(decode, source),
-      collect,
-    );
+      stream.sink
+    )
+
+    let end = false
+    while (!end) {
+      const [response] = await itPipe(
+        stream.source,
+        source => map(decode, source),
+        collect
+      )
+
+      if (response === 'THE END') {
+        end = true
+        pipeEndHandler()
+      } else {
+        responseHandler(response)
+      }
+    }
   }
 
   async vegetative() {
@@ -117,65 +131,72 @@ class UserNode extends events.EventEmitter {
   createProtocolHandler(action, soul, exec, UUIDNameSpace) {
     return async ({ connection, stream, protocol }) => {
       const id = connection.remotePeer.toB58String()
-      const [username, topic, meta, ...args] = await itPipe(
+      const requestHandler = async ([username, topic, meta, ...args]) => {
+        if (!meta.uuid) {
+          meta.uuid = generateUUID(UUIDNameSpace)
+        }
+
+        this.emit('handle:request', cloneDeep({
+          username,
+          topic,
+          receiver: this.id,
+          request: { action: protocol, args },
+          sender: id,
+        }))
+
+        let status = 0
+        let results
+        let generator
+        const emitThenPipe = async () => {
+          this.emit('handle:response', cloneDeep({
+            topic,
+            sender: this.id,
+            username: this.username,
+            receiver: id,
+            response: { status, results }
+          }))
+
+          await itPipe(
+            [[this.username, status, results]],
+            source => map(encode, source),
+            stream.sink
+          )
+        }
+
+        try {
+          const di = { connection, stream, id, username, topic, soul, exec, meta }
+
+          if (action instanceof AsyncGeneratorFunction || action instanceof GeneratorFunction) {
+            generator = action(di, ...args)
+          } else if (action instanceof AsyncFunction) {
+            generator = (async function* () { yield await action(di, ...args) })()
+          } else {
+            generator = (function* () { yield  action(di, ...args) })()
+          }
+
+          for await (const item of generator) {
+            results = item === undefined ? null : item
+            await emitThenPipe()
+          }
+        } catch(error) {
+          log(`handler error: ${error}`)
+          status = 1
+          results = error.toString()
+          await emitThenPipe()
+        } finally {
+          await itPipe(
+            ['THE END'],
+            source => map(encode, source),
+            stream.sink
+          )
+        }
+      }
+      const [request] = await itPipe(
         stream.source,
         source => map(decode, source),
         collect
       )
-
-      if (!meta.uuid) {
-        meta.uuid = generateUUID(UUIDNameSpace)
-      }
-
-      this.emit('handle:request', cloneDeep({
-        username,
-        topic,
-        receiver: this.id,
-        request: { action: protocol, args },
-        sender: id,
-      }))
-
-      let status = 0
-      let results = []
-      let generator
-
-      try {
-        const di = { connection, stream, id, username, topic, soul, exec, meta }
-
-        if (action instanceof AsyncGeneratorFunction || action instanceof GeneratorFunction) {
-          generator = action(di, ...args)
-        } else if (action instanceof AsyncFunction) {
-          generator = (async function* () { yield await action(di, ...args) })()
-        } else {
-          generator = (function* () { yield  action(di, ...args) })()
-        }
-
-        for await (const item of generator) {
-          if (item === undefined) {
-            results.push(null)
-          } else {
-            results.push(item)
-          }
-        }
-      } catch(error) {
-        log(`handler error: ${error}`)
-        status = 1
-        results = error.toString()
-      }
-
-      this.emit('handle:response', cloneDeep({
-        topic,
-        sender: this.id,
-        username: this.username,
-        receiver: id,
-        response: { status, results }
-      }))
-
-      await itPipe(
-        [this.username, status, results],
-        source => map(encode, source),
-        stream.sink
-      )
+      await requestHandler(request)
     }
   }
 

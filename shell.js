@@ -1,4 +1,4 @@
-import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction, generateUUID } from "./utils.js"
+import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction, generateUUID, sleep } from "./utils.js"
 import { collect } from 'https://cdn.jsdelivr.net/npm/streaming-iterables@5.0.3/dist/index.mjs'
 import { ActionHelper, proxyHandler} from "./action-helper.js"
 import ActionResponse from './action-response.js'
@@ -6,7 +6,7 @@ import { itPipe, EventEmitter, cloneDeep } from "./dep.js"
 
 class Shell extends EventEmitter{
   constructor(userNode, soul) {
-    super()
+    super({wildcard: true})
     this.soul = soul
     this.userNode = userNode
     this.addEventListener()
@@ -17,7 +17,7 @@ class Shell extends EventEmitter{
   addEventListener() {
     this.userNode.on('handle:request', data => this.emit('action:request', data))
     this.userNode.on('handle:response', data => this.emit('action:response', data))
-    this.on('uuid:*.*', this.createActionEventHandler(this))
+    this.on('uuid.*', this.createActionEventHandler(this))
   }
 
   ensureAction({ topic='topic', receivers=[], action='/Ping', args=[], meta={} }, uuid=false) {
@@ -117,20 +117,29 @@ class Shell extends EventEmitter{
         }))
       }
 
-      const [remoteUser, status, results] = await this.userNode.pipe([username, topic, meta].concat(args), stream)
-
-      for (const result of results) {
-        const response = {
+      const responses = []
+      let pipeEnd = false
+      this.userNode.pipe([[username, topic, meta].concat(args)], stream, ([remoteUser, status, results]) => {
+        responses.push({
           topic,
           sender: receiver,
           username: remoteUser,
           receiver: id,
-          response: {status, results: result}
-        }
+          response: {status, results}
+        })
+      }, () => {
+        pipeEnd = true
+      })
 
-        yield response
-        if (!pipe) {
-          this.emit('action:response', cloneDeep(response))
+      while (!pipeEnd || responses.length) {
+        const response = responses.shift()
+        if (response) {
+          yield response
+          if (!pipe) {
+            this.emit('action:response', cloneDeep(response))
+          }
+        } else {
+          await sleep(100)
         }
       }
     }
@@ -292,12 +301,15 @@ class Shell extends EventEmitter{
   }
 
   createActionEventHandler(shell) {
-    const localhost = shell.userNode.id
-
     async function handler(message) {
+      // /FireEvent action message
+      if (!message.meta && !message.data) {
+        return
+      }
       const {meta, data} = message
+      const localhost = shell.userNode.id
       const event = this.event
-      const offset = 'uuid:'.length
+      const offset = 'uuid.'.length
       const target = event.slice(offset, offset + 36)
       let destination = []
       const addDestination = (stream) => {
