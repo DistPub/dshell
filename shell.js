@@ -17,9 +17,13 @@ class Shell extends EventEmitter{
   addEventListener() {
     this.userNode.on('handle:request', data => this.emit('action:request', data))
     this.userNode.on('handle:response', data => this.emit('action:response', data))
+    this.on('uuid:*.*', this.createActionEventHandler(this))
   }
 
-  ensureAction({ topic='topic', receivers=[], action='/Ping', args=[], meta={} }) {
+  ensureAction({ topic='topic', receivers=[], action='/Ping', args=[], meta={} }, uuid=false) {
+    if (uuid && !meta.uuid) {
+      meta.uuid = generateUUID(this.UUIDNameSpace)
+    }
     return {topic, receivers, action, args, meta}
   }
 
@@ -279,6 +283,51 @@ class Shell extends EventEmitter{
     return args.join(' ')
   }
 
+  createActionEventHandler(shell) {
+    const localhost = shell.userNode.id
+
+    async function handler(message) {
+      const {meta, data} = message
+      const event = this.event
+      const offset = 'uuid:'.length
+      const target = event.slice(offset, offset + 36)
+      let destination = []
+      const addDestination = (stream) => {
+        if (stream.host) {
+          destination = destination.concat(stream.host)
+        }
+      }
+
+      if (target === meta.uuid) {
+        addDestination(meta.upstream)
+        addDestination(meta.downstream)
+      } else if (target === meta.upstream.uuid) {
+        addDestination(meta.upstream)
+      } else if (target === meta.downstream.uuid) {
+        addDestination(meta.downstream)
+      }
+
+      destination = new Set(destination)
+      if (destination.has(localhost)) {
+        destination.delete(localhost)
+        shell.emit(event, data)
+      }
+
+      if (!destination.size) {
+        return
+      }
+
+      const action = {action: '/FireEvent', args: [event, data]}
+
+      if (meta.commander.host === localhost) {
+        return await shell.exec({receivers: [...destination], ...action})
+      }
+
+      return await shell.exec({receivers: [meta.commander.host], action: '/Xargs', args: [action]})
+    }
+    return handler
+  }
+
   /* sugar action */
 
   /**
@@ -291,14 +340,17 @@ class Shell extends EventEmitter{
   async actionPipeExec({meta}, ...actions) {
     const commander = { host: this.userNode.id, uuid: meta.uuid }
     const getStream = action => {
-      return action ? { host: action.receivers, uuid: action.meta.uuid } : {}
+      return action ? {
+        host: action.receivers.length ? action.receivers : [this.userNode.id],
+        uuid: action.meta.uuid } : {}
     }
     const execs = [[{ response: { results: { ignore: true } } }]]
+    actions = actions.map(action => this.ensureAction(action, true))
     for (const [idx, action] of actions.entries()) {
       action.meta.commander = commander
       action.meta.upstream = getStream(actions[idx - 1])
       action.meta.downstream = getStream(actions[idx + 1])
-      execs.push(this.createPipeExecGenerator(this.ensureAction(action)))
+      execs.push(this.createPipeExecGenerator(action))
     }
     execs.push(collect)
     return await itPipe(...execs)
