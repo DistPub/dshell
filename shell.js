@@ -20,6 +20,55 @@ class Shell extends EventEmitter{
     this.on('uuid.*', this.createActionEventHandler(this))
   }
 
+  createActionEventHandler(shell) {
+    async function handler(message) {
+      // /FireEvent action message
+      if (!message.meta && !message.data) {
+        return
+      }
+      const {meta, data} = message
+      const localhost = shell.userNode.id
+      let event = this.event
+      const offset = 'uuid.'.length
+      const target = event.slice(offset, offset + 36)
+      let destination = []
+      const addDestination = (stream) => {
+        if (stream.host) {
+          destination = destination.concat(stream.host)
+        }
+      }
+
+      if (target === meta.uuid) {
+        addDestination(meta.upstream)
+        addDestination(meta.downstream)
+      } else if (target === meta.upstream.uuid) {
+        addDestination(meta.upstream)
+      } else if (target === meta.downstream.uuid) {
+        addDestination(meta.downstream)
+      }
+
+      destination = new Set(destination)
+      event = event.replace('.', ':')
+      if (destination.has(localhost)) {
+        destination.delete(localhost)
+        shell.emit(event, data)
+      }
+
+      if (!destination.size) {
+        return
+      }
+
+      const action = {receivers: [...destination], action: '/FireEvent', args: [event, data]}
+
+      if (meta.commander.host === localhost) {
+        return await shell.exec(action)
+      }
+
+      return await shell.exec({receivers: [meta.commander.host], action: '/Xargs', args: [action]})
+    }
+    return handler
+  }
+
   ensureAction({ topic='topic', receivers=[], action='/Ping', args=[], meta={} }, uuid=false) {
     if (uuid && !meta.uuid) {
       meta.uuid = generateUUID(this.UUIDNameSpace)
@@ -75,21 +124,6 @@ class Shell extends EventEmitter{
     return wrapper.bind(this)
   }
 
-  async getStream(id, action) {
-    let connection = await this.userNode.getConnectionById(id)
-
-    try {
-      return await this.userNode.getStreamByConnectionProtocol(connection, action)
-    } catch (error) {
-      if (error.code === 'ERR_UNSUPPORTED_PROTOCOL') {
-        throw error
-      }
-      log(`connection maybe closed, get stream error: ${error}`)
-      await this.userNode.getConnectionById(id)
-      return await this.getStream(id, action)
-    }
-  }
-
   async *rpc(topic, receivers, action, args, pipe, meta) {
     const id = this.userNode.id
     const username = this.userNode.username
@@ -100,8 +134,6 @@ class Shell extends EventEmitter{
         yield* this.applyAction(topic, action, args, pipe, meta)
         continue
       }
-
-      const stream = await this.getStream(receiver, action)
 
       if (!pipe) {
         this.emit('action:request', cloneDeep({
@@ -115,7 +147,8 @@ class Shell extends EventEmitter{
 
       const responses = []
       let pipeEnd = false
-      this.userNode.pipe([[username, topic, meta].concat(args)], stream, ([remoteUser, status, results]) => {
+      const message = [username, topic, meta].concat(args)
+      this.userNode.pipe([message], [receiver, action], ([remoteUser, status, results]) => {
         responses.push({
           topic,
           sender: receiver,
@@ -294,55 +327,6 @@ class Shell extends EventEmitter{
    */
   actionEcho(_, ...args) {
     return args.join(' ')
-  }
-
-  createActionEventHandler(shell) {
-    async function handler(message) {
-      // /FireEvent action message
-      if (!message.meta && !message.data) {
-        return
-      }
-      const {meta, data} = message
-      const localhost = shell.userNode.id
-      let event = this.event
-      const offset = 'uuid.'.length
-      const target = event.slice(offset, offset + 36)
-      let destination = []
-      const addDestination = (stream) => {
-        if (stream.host) {
-          destination = destination.concat(stream.host)
-        }
-      }
-
-      if (target === meta.uuid) {
-        addDestination(meta.upstream)
-        addDestination(meta.downstream)
-      } else if (target === meta.upstream.uuid) {
-        addDestination(meta.upstream)
-      } else if (target === meta.downstream.uuid) {
-        addDestination(meta.downstream)
-      }
-
-      destination = new Set(destination)
-      event = event.replace('.', ':')
-      if (destination.has(localhost)) {
-        destination.delete(localhost)
-        shell.emit(event, data)
-      }
-
-      if (!destination.size) {
-        return
-      }
-
-      const action = {receivers: [...destination], action: '/FireEvent', args: [event, data]}
-
-      if (meta.commander.host === localhost) {
-        return await shell.exec(action)
-      }
-
-      return await shell.exec({receivers: [meta.commander.host], action: '/Xargs', args: [action]})
-    }
-    return handler
   }
 
   /* sugar action */

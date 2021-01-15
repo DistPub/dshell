@@ -1,4 +1,4 @@
-import { map, collect } from 'https://cdn.jsdelivr.net/npm/streaming-iterables@5.0.3/dist/index.mjs'
+import { map, collect, consume } from 'https://cdn.jsdelivr.net/npm/streaming-iterables@5.0.3/dist/index.mjs'
 import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction, generateUUID } from './utils.js'
 import { cloneDeep, msgpack, PeerId, libp2pNoise, libp2pMplex, itPipe, datastoreLevel, libp2p, libp2pWebrtcStar, cryptoKeys, events } from './dep.js'
 
@@ -26,28 +26,31 @@ class UserNode extends events.EventEmitter {
     this.saveId()
   }
 
-  async pipe(messages, stream, responseHandler, pipeEndHandler) {
+  async getStream(id, protocol) {
+    let connection = await this.getConnectionById(id)
+    try {
+      return await this.getStreamByConnectionProtocol(connection, protocol)
+    } catch (error) {
+      if (error.code === 'ERR_UNSUPPORTED_PROTOCOL') {
+        throw error
+      }
+      log(`connection maybe closed, get stream error: ${error}`)
+      connection = await this.getConnectionById(id)
+      return await this.getStreamByConnectionProtocol(connection, protocol)
+    }
+  }
+
+  async pipe(messages, [id, protocol], responseHandler, pipeEndHandler) {
+    const stream = await this.getStream(id, protocol)
     await itPipe(
       messages,
       source => map(encode, source),
-      stream.sink
+      stream,
+      source => map(decode, source),
+      source => map(responseHandler, source),
+      consume
     )
-
-    let end = false
-    while (!end) {
-      const [response] = await itPipe(
-        stream.source,
-        source => map(decode, source),
-        collect
-      )
-
-      if (response === 'THE END') {
-        end = true
-        pipeEndHandler()
-      } else {
-        responseHandler(response)
-      }
-    }
+    pipeEndHandler()
   }
 
   async vegetative() {
@@ -144,24 +147,7 @@ class UserNode extends events.EventEmitter {
           sender: id,
         }))
 
-        let status = 0
-        let results
         let generator
-        const emitThenPipe = async () => {
-          this.emit('handle:response', cloneDeep({
-            topic,
-            sender: this.id,
-            username: this.username,
-            receiver: id,
-            response: { status, results }
-          }))
-
-          await itPipe(
-            [[this.username, status, results]],
-            source => map(encode, source),
-            stream.sink
-          )
-        }
 
         try {
           const di = { connection, stream, id, username, topic, soul, exec, meta }
@@ -174,18 +160,34 @@ class UserNode extends events.EventEmitter {
             generator = (function* () { yield  action(di, ...args) })()
           }
 
-          for await (const item of generator) {
-            results = item === undefined ? null : item
-            await emitThenPipe()
-          }
+          await itPipe(
+            generator,
+            source => map(item => item === undefined ? null : item, source),
+            source => map(results => {
+              this.emit('handle:response', cloneDeep({
+                topic,
+                sender: this.id,
+                username: this.username,
+                receiver: id,
+                response: { status: 0, results }
+              }))
+              return [this.username, 0, results]
+            }, source),
+            source => map(encode, source),
+            stream.sink
+          )
         } catch(error) {
           log(`handler error: ${error}`)
-          status = 1
-          results = error.toString()
-          await emitThenPipe()
-        } finally {
+          this.emit('handle:response', cloneDeep({
+            topic,
+            sender: this.id,
+            username: this.username,
+            receiver: id,
+            response: { status: 1, results: error.toString() }
+          }))
+
           await itPipe(
-            ['THE END'],
+            [[this.username, 1, error.toString()]],
             source => map(encode, source),
             stream.sink
           )
