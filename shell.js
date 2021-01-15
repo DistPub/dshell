@@ -97,6 +97,14 @@ class Shell extends EventEmitter{
     const username = this.userNode.username
 
     for (const receiver of receivers) {
+      // self call
+      if (receiver === id) {
+        for await (const item of this.applyAction(topic, action, args, pipe, meta)) {
+          yield item
+        }
+        continue
+      }
+
       const stream = await this.getStream(receiver, action)
 
       if (!pipe) {
@@ -317,10 +325,10 @@ class Shell extends EventEmitter{
         return
       }
 
-      const action = {action: '/FireEvent', args: [event, data]}
+      const action = {receivers: [...destination], action: '/FireEvent', args: [event, data]}
 
       if (meta.commander.host === localhost) {
-        return await shell.exec({receivers: [...destination], ...action})
+        return await shell.exec(action)
       }
 
       return await shell.exec({receivers: [meta.commander.host], action: '/Xargs', args: [action]})
