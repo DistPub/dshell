@@ -308,7 +308,7 @@ class Shell extends EventEmitter{
       }
       const {meta, data} = message
       const localhost = shell.userNode.id
-      const event = this.event
+      let event = this.event
       const offset = 'uuid.'.length
       const target = event.slice(offset, offset + 36)
       let destination = []
@@ -328,6 +328,7 @@ class Shell extends EventEmitter{
       }
 
       destination = new Set(destination)
+      event = event.replace('.', ':')
       if (destination.has(localhost)) {
         destination.delete(localhost)
         shell.emit(event, data)
