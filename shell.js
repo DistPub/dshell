@@ -156,8 +156,18 @@ class Shell extends EventEmitter{
           receiver: id,
           response: {status, results}
         })
-      }, () => {
+      }, (error) => {
         pipeEnd = true
+
+        if (error) {
+          responses.push({
+            topic,
+            sender: receiver,
+            username: null,
+            receiver: id,
+            response: {status: 1, results: `rpc error: ${error}`}
+          })
+        }
       })
 
       while (!pipeEnd || responses.length) {

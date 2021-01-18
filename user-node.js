@@ -41,16 +41,23 @@ class UserNode extends events.EventEmitter {
   }
 
   async pipe(messages, [id, protocol], responseHandler, pipeEndHandler) {
-    const stream = await this.getStream(id, protocol)
-    await itPipe(
-      messages,
-      source => map(encode, source),
-      stream,
-      source => map(decode, source),
-      source => map(responseHandler, source),
-      consume
-    )
-    pipeEndHandler()
+    let exception
+
+    try {
+      const stream = await this.getStream(id, protocol)
+      await itPipe(
+        messages,
+        source => map(encode, source),
+        stream,
+        source => map(decode, source),
+        source => map(responseHandler, source),
+        consume
+      )
+    } catch (error) {
+      exception = error
+    } finally {
+      pipeEndHandler(exception)
+    }
   }
 
   async vegetative() {
