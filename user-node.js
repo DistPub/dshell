@@ -16,10 +16,35 @@ class UserNode extends events.EventEmitter {
     this.simplePeerOptions = simplePeerOptions
     this.mode = mode
     this.connectionBook = new Map()
+    this.rtcPool = []
+  }
+
+  getRTCChannel(id) {
+    for (const channel of this.rtcPool) {
+      if (channel.remotePeer === id) {
+        return channel
+      }
+    }
+    throw 'RTC Channel Not Found!'
+  }
+
+  patchNodeUpgrader() {
+    const origin = this.node.upgrader._createConnection
+    this.node.upgrader._createConnection = (options) => {
+      const {maConn, remotePeer} = options
+      const id = remotePeer.toB58String()
+      maConn.conn.remotePeer = id
+      this.rtcPool.push(maConn.conn)
+      maConn.conn.on('close', () => {
+        this.rtcPool.splice(this.rtcPool.map(item => item.remotePeer).indexOf(id))
+      })
+      return origin.apply(this.node.upgrader, [options])
+    }
   }
 
   async init(optionFilter=item=>item) {
     this.node = await this.createLibp2pNode(this.signallingServer, this.simplePeerOptions, optionFilter)
+    this.patchNodeUpgrader()
     this.addEventListener()
     this.id = this.node.peerId.toB58String()
     log(`success create node with id ${this.id}`)
