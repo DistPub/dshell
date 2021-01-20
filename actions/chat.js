@@ -13,7 +13,7 @@ function createStreamAction(channel, stream) {
 }
 
 async function connect(exec, toWho, initiator=true) {
-  if (initiator) {
+  if (initiator && !this.userNode.hasRTCChannel(toWho)) {
     await exec({action: '/Ping', receivers: [toWho]})
   }
   const channel = this.userNode.getRTCChannel(toWho)

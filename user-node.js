@@ -19,6 +19,10 @@ class UserNode extends events.EventEmitter {
     this.rtcPool = []
   }
 
+  hasRTCChannel(id) {
+    return Boolean(this.rtcPool.filter(channel => channel.remotePeer === id).length)
+  }
+
   getRTCChannel(id) {
     for (const channel of this.rtcPool) {
       if (channel.remotePeer === id) {
@@ -112,8 +116,10 @@ class UserNode extends events.EventEmitter {
     try {
       stream = await connection.newStream(protocol);
     } catch (error) {
-      log(`offline ${id} throw dial error: ${error}`)
-      this.emit('user:offline', id)
+      if (error._errors && error._errors.length && error._errors[0].code === 'ERR_SIGNALLING_FAILED') {
+        log(`offline ${id} throw dial error: ${error}`)
+        this.emit('user:offline', id)
+      }
       this.connectionBook.delete(id)
       throw error
     }
@@ -131,8 +137,10 @@ class UserNode extends events.EventEmitter {
     try {
       connection = await this.node.dial(PeerId.createFromB58String(id), { spOptions: this.simplePeerOptions })
     } catch (error) {
-      log(`offline ${id} throw dial error: ${error}`)
-      this.emit('user:offline', id)
+      if (error._errors && error._errors.length && error._errors[0].code === 'ERR_SIGNALLING_FAILED') {
+        log(`offline ${id} throw dial error: ${error}`)
+        this.emit('user:offline', id)
+      }
       throw error
     }
     this.connectionBook.set(id, connection)
@@ -143,8 +151,10 @@ class UserNode extends events.EventEmitter {
     try {
       await this.node.ping(PeerId.createFromB58String(id))
     } catch (error) {
-      log(`offline ${id} throw ping error: ${error}`)
-      this.emit('user:offline', id)
+      if (error._errors && error._errors.length && error._errors[0].code === 'ERR_SIGNALLING_FAILED') {
+        log(`offline ${id} throw ping error: ${error}`)
+        this.emit('user:offline', id)
+      }
     }
   }
 
