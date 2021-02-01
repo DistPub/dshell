@@ -302,7 +302,12 @@ class Shell extends EventEmitter{
   async installModule(...pathes) {
     for (const path of pathes) {
       try {
-        const {default: actions} = await import(path)
+        let actions = path
+
+        if (typeof path === 'string') {
+          actions = (await import(path)).default
+        }
+
         actions.filter(action => typeof action === 'function').forEach(action => this.installExternalAction(action))
         log(`install module(${path}) success`)
       } catch (error) {
