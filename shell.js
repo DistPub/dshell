@@ -268,6 +268,7 @@ class Shell extends EventEmitter{
     } catch(error) {
       response.response.status = 1
       response.response.results = error.toString()
+      console.error(error.stack)
 
       yield response
       if (!pipe) {

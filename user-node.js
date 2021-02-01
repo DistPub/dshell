@@ -219,6 +219,7 @@ class UserNode extends events.EventEmitter {
             stream.sink
           )
         } catch(error) {
+          console.error(error.stack)
           log(`handler error: ${error}`)
           this.emit('handle:response', cloneDeep({
             topic,
