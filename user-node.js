@@ -296,9 +296,6 @@ class UserNode extends events.EventEmitter {
   }
 
   installHandler(protocol, handler) {
-    if (!this.node.isStarted()) {
-      return
-    }
     this.node.handle(protocol, handler)
   }
 }

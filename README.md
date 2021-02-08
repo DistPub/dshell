@@ -27,16 +27,22 @@ Then you can import in module script tag:
 ```
 <script type="module" about="main">
   import shell from '/path/to/dshell/dshell.js'
-  let response = await shell.exec({action: '/Ping'})
-  console.log(response.json()) // => 'pong'
+  document.addEventListener('DOMContentLoaded', async () => {
+    await shell.init()
+    let response = await shell.exec({action: '/Ping'})
+    console.log(response.json()) // => 'pong'
+  })
 </script>
 
 or use cdn
 
 <script type="module" about="main">
   import shell from 'https://cdn.jsdelivr.net/npm/dshell/dshell.js'
-  let response = await shell.exec({action: '/Ping'})
-  console.log(response.json()) // => 'pong'
+  document.addEventListener('DOMContentLoaded', async () => {
+    await shell.init()
+    let response = await shell.exec({action: '/Ping'})
+    console.log(response.json()) // => 'pong'
+  })
 </script>
 ```
 
