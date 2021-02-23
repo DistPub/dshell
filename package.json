@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build-dep": "node browserify.js>dep.bundle.min.js"
+    "build-dep": "node browserify.js | sed  '/_where/d'>dep.bundle.min.js"
   },
   "repository": {
     "type": "git",
