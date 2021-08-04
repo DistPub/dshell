@@ -239,7 +239,14 @@ class Shell extends EventEmitter{
     }
 
     try {
-      const func = this['action' + action.slice(1)]
+      let func = null
+
+      // action under namespace
+      if (action[0] === ':') {
+        func = this['action$' + action.slice(1).replace('/', '')]
+      } else {
+        func = this['action' + action.slice(1)]
+      }
       const di = { topic, soul: this.soul, exec: this.exec.bind(this), meta }
 
       if (func instanceof AsyncGeneratorFunction || func instanceof GeneratorFunction) {
@@ -287,7 +294,7 @@ class Shell extends EventEmitter{
     )
   }
 
-  installExternalAction(action) {
+  installExternalAction(action, namespace=null) {
     let actionName = action.name
     const first = actionName[0]
 
@@ -296,8 +303,13 @@ class Shell extends EventEmitter{
       actionName = first.toUpperCase() + actionName.slice(1)
     }
 
-    Shell.prototype[`action${actionName}`] = action.bind(this)
-    this.installRemoteAction(`/${actionName}`, action.bind(this))
+    if (namespace) {
+      Shell.prototype[`action$${namespace}${actionName}`] = action.bind(this)
+      this.installRemoteAction(`:${namespace}/${actionName}`, action.bind(this))
+    } else {
+      Shell.prototype[`action${actionName}`] = action.bind(this)
+      this.installRemoteAction(`/${actionName}`, action.bind(this))
+    }
   }
 
   async installModule(...pathes) {
@@ -567,10 +579,11 @@ class Shell extends EventEmitter{
    * @param autoPipe - If auto use pipe action when actions more than one
    * @param pipeOption - pipe option
    * @param actions - Actions
+   * @param namespace - action namespace
    * @returns {Proxy} Proxy action helper so that it can dynamic get action from shell
    */
-  action(autoPipe=true, pipeOption={}, actions=[]) {
-    return new Proxy(new ActionHelper(this, autoPipe, pipeOption, actions), proxyHandler)
+  action(autoPipe=true, pipeOption={}, actions=[], namespace=null) {
+    return new Proxy(new ActionHelper(this, autoPipe, pipeOption, actions, namespace), proxyHandler)
   }
 
   /**

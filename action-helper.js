@@ -1,13 +1,21 @@
 export class ActionHelper {
-  constructor(shell, autoPipe=true, pipeOption={}, actions=[]) {
+  constructor(shell, autoPipe=true, pipeOption={}, actions=[], namespace=null) {
     this.shell = shell
     this.autoPipe = autoPipe
     this.pipeOption = pipeOption
     this.actions = actions
+    this.namespace = namespace
+  }
+
+  using(namespace) {
+    this.namespace = namespace
+    return this.clone()
   }
 
   clone() {
-    return new Proxy(new ActionHelper(this.shell, this.autoPipe, this.pipeOption, this.actions), proxyHandler)
+    return new Proxy(
+      new ActionHelper(this.shell, this.autoPipe, this.pipeOption, this.actions, this.namespace),
+      proxyHandler)
   }
 
   toJSON() {
@@ -133,24 +141,46 @@ export class ActionHelper {
   }
 }
 
+function constructActionProp(prop, namespace) {
+  if (namespace) {
+    return `action$${namespace}${prop}`
+  }
+  return `action${prop}`
+}
+
+function constructAction(prop, namespace) {
+  if (namespace) {
+    return `:${namespace}/${prop}`
+  }
+  return `/${prop}`
+}
+
 export const proxyHandler = {
   get(target, prop, receiver) {
     if (prop in target) {
       return Reflect.get(...arguments)
     }
 
-    let actionName = `action${prop}`
-    if (actionName in target.shell) {
-      target.actions.push({action: `/${prop}`})
-      return target.clone()
+    let actionName;
+
+    // naive call
+    actionName = constructActionProp(prop, target.namespace)
+
+    if (prop[0] === prop[0].toUpperCase()) {
+      if (actionName in target.shell) {
+        target.actions.push({action: constructAction(prop, target.namespace)})
+        return target.clone()
+      }
     }
 
+    // normal call
     prop = prop[0].toUpperCase() + prop.slice(1)
-    actionName = `action${prop}`
+    actionName = constructActionProp(prop, target.namespace)
+
     if (actionName in target.shell) {
       return (options={}) => {
         options = ActionHelper.ensureOptions(options)
-        target.actions.push({...options, action: `/${prop}`})
+        target.actions.push({...options, action: constructAction(prop, target.namespace)})
         return target.clone()
       }
     }
