@@ -1,6 +1,5 @@
-import { map, collect, consume } from 'https://cdn.jsdelivr.net/npm/streaming-iterables@5.0.3/dist/index.mjs'
 import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction, generateUUID } from './utils.js'
-import { cloneDeep, msgpack, PeerId, libp2pNoise, libp2pMplex, itPipe, datastoreLevel, libp2p, libp2pWebrtcStar, cryptoKeys, events } from './dep.js'
+import { map, collect, consume, cloneDeep, msgpack, PeerId, libp2pNoise, libp2pMplex, itPipe, datastoreLevel, libp2p, libp2pWebrtcStar, cryptoKeys, events } from './dep.js'
 
 const transportClassName = libp2pWebrtcStar.prototype[Symbol.toStringTag]
 const encode = msgpack.encode

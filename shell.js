@@ -1,8 +1,7 @@
 import { log, AsyncFunction, AsyncGeneratorFunction, GeneratorFunction, generateUUID, sleep } from "./utils.js"
-import { collect } from 'https://cdn.jsdelivr.net/npm/streaming-iterables@5.0.3/dist/index.mjs'
 import { ActionHelper, proxyHandler} from "./action-helper.js"
 import ActionResponse from './action-response.js'
-import { itPipe, EventEmitter, cloneDeep } from "./dep.js"
+import { collect, itPipe, EventEmitter, cloneDeep } from "./dep.js"
 
 const UUID_SIZE = 36
 
@@ -23,11 +22,27 @@ class Shell extends EventEmitter{
   }
 
   createActionEventHandler(shell) {
+    /*
+    * dispatch action event
+    *  when you emit event
+    *   event name MUST MATCH uuid.xxx-xxx:eventName format
+    *   event message MUST equal {meta, data, direction}
+    *     direction you can set `upstream` or `downstream` or not set to use both
+    *  when you listen event
+    *   you can listen upstream or downstream action(the exact action not sugar)
+    *   event name MUST MATCH uuid:xxx-xxx:eventName format
+    *   event message come from emitted message
+    *
+    *  upstream or downstream can be a sugar, this function can transform event to
+    *  sugar event, the sugar can dispatch again to the normal action
+    *
+    *  upstream or downstream can be a remote host, this function can fire event to
+    *  remote*/
     async function handler(message) {
-      let event = this.event // uuid.xxx-xxx:*
+      let event = this.event // event name
       const offset = 'uuid.'.length
       const source = event.slice(offset, offset + UUID_SIZE)
-      const {meta, data, direction} = message
+      const {meta, direction} = message
 
       if (source !== meta.uuid) {
         throw 'action event name\'s uuid must equal to meta.uuid!'
@@ -52,45 +67,48 @@ class Shell extends EventEmitter{
         }
       }
 
-      if (direction === 'upstream') {
+      if (!direction || direction === 'upstream') {
         addDestination(meta.upstream)
-      } else if (direction === 'downstream') {
-        addDestination(meta.downstream)
-      } else {
-        addDestination(meta.upstream)
+      }
+
+      if (!direction || direction === 'downstream') {
         addDestination(meta.downstream)
       }
 
       if (sugar.length) {
-        await shell.fire(meta.commander.host, sugar, sugarEventName, data)
+        await shell.fire(meta.commander.host, sugar, sugarEventName, message)
       }
 
       if (normal.length) {
-       await shell.fire(meta.commander.host, normal, normalEventName, data)
+       await shell.fire(meta.commander.host, normal, normalEventName, message)
       }
     }
     return handler
   }
 
-  async fire(commander, to, event, data) {
+  async fire(commander, to, event, message) {
     const destination = new Set(to)
     const localhost = this.userNode.id
 
     if (destination.has(localhost)) {
       destination.delete(localhost)
-      this.emit(event, data)
+      this.emit(event, message)
     }
 
+    // target to local
     if (!destination.size) {
       return
     }
 
-    const action = {receivers: [...destination], action: '/FireEvent', args: [event, data]}
+    // target to remote
+    const action = {receivers: [...destination], action: '/FireEvent', args: [event, message]}
 
+    // I know how to reach remote
     if (commander === localhost) {
       return await this.exec(action)
     }
 
+    // the commander know how to reach remote
     return await this.exec({receivers: [commander], action: '/Xargs', args: [action]})
   }
 
@@ -395,56 +413,12 @@ class Shell extends EventEmitter{
     const execs = [[{ response: { results: { ignore: true } } }]]
     actions = actions.map(action => this.ensureAction(action, true))
 
-    const getStream = idx => {
-      if (idx === -1 || idx === actions.length) {
-        return {host: [this.userNode.id], uuid: meta.uuid, sugar: true}
-      }
-      const action = actions[idx]
-      return {
-        host: action.receivers.length ? action.receivers : [this.userNode.id],
-        uuid: action.meta.uuid,
-        sugar: action.action === '/PipeExec'}
-    }
-    const getActionUUID = idx => actions[idx].meta.uuid
-    const reEmitEvent = direction => {
-      const shell = this
-      function handler(data) {
-        const event = `uuid.${meta.uuid}:${this.event.slice('uuid:'.length + UUID_SIZE + 1)}`
-        shell.emit(event, {meta, data, direction})
-      }
-      return handler
-    }
-    const fireTo = (idx) => {
-      const shell = this
-      const action = actions[idx]
-      const sugar = action.action === '/PipeExec'
-      function handler(data) {
-        const event = `uuid:${meta.uuid}${sugar?'.':':'}${this.event.slice('uuid:'.length + UUID_SIZE + 1)}`
-        shell.fire(meta.commander.host, action.receivers.length ? action.receivers : [shell.userNode.id], event, data)
-      }
-      return handler
-    }
-
-    const listeners = []
-
-    // normal event re-emit to sugar level
-    listeners.push(this.on(`uuid:${getActionUUID(0)}.*`, reEmitEvent('upstream'), {objectify: true}))
-    listeners.push(this.on(`uuid:${getActionUUID(actions.length - 1)}.*`, reEmitEvent('downstream'), {objectify: true}))
-
-    // sugar event fire to related sugar or action
-    if (meta.upstream) {
-      listeners.push(this.on(`uuid:${meta.upstream.uuid}.*`, fireTo(0), {objectify: true}))
-    }
-
-    if (meta.downstream) {
-      listeners.push(this.on(`uuid:${meta.downstream.uuid}.*`, fireTo(actions.length - 1), {objectify: true}))
-    }
-
+    let {listeners, commander, defaultStream} = this.setupSugar(meta, actions)
     try {
       for (const [idx, action] of actions.entries()) {
-        action.meta.commander = { host: this.userNode.id, uuid: meta.uuid }
-        action.meta.upstream = getStream(idx - 1)
-        action.meta.downstream = getStream(idx + 1)
+        action.meta.commander = commander
+        action.meta.upstream = this.getStream(defaultStream, idx - 1, actions)
+        action.meta.downstream = this.getStream(defaultStream, idx + 1, actions)
         execs.push(this.createPipeExecGenerator(action))
       }
       execs.push(collect)
@@ -483,11 +457,22 @@ class Shell extends EventEmitter{
    * @param more - more args
    * @returns {Promise.<json>} action response
    */
-  async actionXargs({exec}, action, ...more) {
-    action = this.ensureAction(action)
+  async actionXargs({meta, exec}, action, ...more) {
+    action = this.ensureAction(action, true)
     action.args = action.args.concat(more.flat())
-    const response = await exec(action)
-    return response.json()
+
+    let actions = [action]
+    let {listeners, commander, defaultStream} = this.setupSugar(meta, actions)
+    action.meta.commander = commander
+    action.meta.upstream = this.getStream(defaultStream, -1, actions)
+    action.meta.downstream = this.getStream(defaultStream, 1, actions)
+
+    try {
+      const response = await exec(action)
+      return response.json()
+    } finally {
+      listeners.map(listener => listener.off())
+    }
   }
 
   /**
@@ -499,46 +484,56 @@ class Shell extends EventEmitter{
    * @param more - more args
    * @returns {Promise.<*>} action response
    */
-  async actionParallelExec({exec}, action, callbackAction, batch, ...more) {
-    action = this.ensureAction(action)
-    let waits = []
-    let responses = []
-    const flushWaits = async () => {
-      responses = responses.concat(await Promise.all(waits))
-      waits = []
-    }
+  async actionParallelExec({meta, exec}, action, callbackAction, batch, ...more) {
+    action = this.ensureAction(action, true)
+    let actions = [action]
+    let {listeners, commander, defaultStream} = this.setupSugar(meta, actions)
+    action.meta.commander = commander
+    action.meta.upstream = this.getStream(defaultStream, -1, actions)
+    action.meta.downstream = this.getStream(defaultStream, 1, actions)
 
-    if (callbackAction) {
-      callbackAction = this.ensureAction(callbackAction)
-    }
-
-    const doCallbackAction = async (results) => {
-      let command = cloneDeep(callbackAction)
-      command.args = command.args.concat([action, results])
-      await exec(command)
-    }
-
-    for (const args of more) {
-      const command = cloneDeep(action)
-      command.args = action.args.concat(args)
-      let promise = exec(command)
+    try {
+      let waits = []
+      let responses = []
+      const flushWaits = async () => {
+        responses = responses.concat(await Promise.all(waits))
+        waits = []
+      }
 
       if (callbackAction) {
-        promise.then(doCallbackAction).catch(doCallbackAction)
+        callbackAction = this.ensureAction(callbackAction)
       }
 
-      waits.push(promise)
+      const doCallbackAction = async (results) => {
+        let command = cloneDeep(callbackAction)
+        command.args = command.args.concat([action, results])
+        await exec(command)
+      }
 
-      if (waits.length === batch) {
+      for (const args of more) {
+        const command = cloneDeep(action)
+        command.args = action.args.concat(args)
+        let promise = exec(command)
+
+        if (callbackAction) {
+          promise.then(doCallbackAction).catch(doCallbackAction)
+        }
+
+        waits.push(promise)
+
+        if (waits.length === batch) {
+          await flushWaits()
+        }
+      }
+
+      if (waits.length) {
         await flushWaits()
       }
-    }
 
-    if (waits.length) {
-      await flushWaits()
+      return responses.map(item => item.payloads).reduce((a, b) => a.concat(b), [])
+    } finally {
+      listeners.map(listener => listener.off())
     }
-
-    return responses.map(item => item.payloads).reduce((a, b) => a.concat(b), [])
   }
 
   /**
@@ -550,6 +545,54 @@ class Shell extends EventEmitter{
    */
   actionFireEvent(_, event, data) {
     this.emit(event, data)
+  }
+
+  /* event helper */
+
+  reEmitEvent(meta, direction) {
+    let shell = this
+    function handler({data}) {
+      const event = `uuid.${meta.uuid}:${this.event.slice('uuid:'.length + UUID_SIZE + 1)}`
+      shell.emit(event, {meta, data, direction})
+    }
+    return handler
+  }
+
+  initSugarListeners(meta, actions) {
+    const listeners = []
+
+    // edge action event re-emit
+    listeners.push(this.on(`uuid:${actions[0].meta.uuid}.*`, this.reEmitEvent(meta,'upstream'), {objectify: true}))
+    listeners.push(this.on(`uuid:${actions[actions.length - 1].meta.uuid}.*`, this.reEmitEvent(meta,'downstream'), {objectify: true}))
+
+    // upstream or downstream event re-emit
+    if (meta.upstream) {
+      listeners.push(this.on(`uuid:${meta.upstream.uuid}.*`, this.reEmitEvent(meta, 'downstream'), {objectify: true}))
+    }
+    if (meta.downstream) {
+      listeners.push(this.on(`uuid:${meta.downstream.uuid}.*`, this.reEmitEvent(meta, 'upstream'), {objectify: true}))
+    }
+
+    return listeners
+  }
+
+  getStream(defaultStream, idx, actions) {
+    if (idx === -1 || idx === actions.length) {
+      return defaultStream
+    }
+    const isSugar = action => ['/PipeExec', '/ParallelExec', '/Xargs'].includes(action)
+    const action = actions[idx]
+    return {
+      host: action.receivers.length ? action.receivers : [this.userNode.id],
+      uuid: action.meta.uuid,
+      sugar: isSugar(action.action)}
+  }
+
+  setupSugar(meta, actions) {
+    let listeners = this.initSugarListeners(meta, actions)
+    let commander = { host: this.userNode.id, uuid: meta.uuid }
+    let defaultStream = {host: [this.userNode.id], uuid: meta.uuid, sugar: true}
+    return  {listeners, commander, defaultStream}
   }
 
   /* action helper */

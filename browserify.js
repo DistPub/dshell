@@ -1,5 +1,9 @@
 const browserifyClass = require('browserify')
-let browserify = browserifyClass()
+let browserify = browserifyClass({
+  plugin: [
+    [ require('esmify'), {} ]
+  ]
+})
 const deps = [
   'libp2p-noise',
   'libp2p-mplex',
@@ -11,13 +15,15 @@ const deps = [
   'events',
   'cids',
   'lodash/cloneDeep',
-  'uint8arrays/concat',
   'peer-id',
   'xlsx',
   'ipfs-core',
   'msgpack-lite',
   'async-mutex',
   'eventemitter2',
+  'streaming-iterables',
+  'dayjs',
+  'uuid',
 ]
 deps.forEach(item => {
   browserify = browserify.require(item)

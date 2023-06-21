@@ -1,6 +1,5 @@
-import dayjs from 'https://cdn.jsdelivr.net/npm/dayjs@1.9.6/esm/index.js/+esm'
-import { log } from './utils.js'
-import { IPFS, datastoreLevel, events, cids, uint8ArrayConcat, Mutex } from "./dep.js"
+import { log, uint8ArrayConcat } from './utils.js'
+import { dayjs, IPFS, datastoreLevel, events, cids, Mutex } from "./dep.js"
 
 class Soul extends events.EventEmitter {
   constructor(db, username) {

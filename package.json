@@ -29,6 +29,7 @@
   "devDependencies": {
     "async-mutex": "^0.2.6",
     "browserify": "^17.0.0",
+    "esmify": "^2.1.1",
     "cids": "^1.0.2",
     "datastore-level": "^2.0.0",
     "eventemitter2": "^6.4.3",
@@ -43,8 +44,10 @@
     "msgpack-lite": "^0.1.26",
     "peer-id": "^0.14.2",
     "uglifyify": "^5.0.2",
-    "uint8arrays": "^2.0.5",
-    "xlsx": "^0.16.9"
+    "xlsx": "^0.16.9",
+    "streaming-iterables": "^5.0.3",
+    "dayjs": "^1.9.6",
+    "uuid": "^8.3.2"
   },
   "contributors": [
     "Smite Chow <xiaopengyou2no1@gmail.com>"

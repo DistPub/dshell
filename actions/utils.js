@@ -1,11 +1,24 @@
 import { XLSX } from "../dep.js"
 
+function ensureCell(value) {
+  if (typeof value === 'string') {
+    return value
+  }
+  return JSON.stringify(value)
+}
+
 async function BuildExcel(_, sheetName, header, rows) {
   const workbook = XLSX.utils.book_new()
   const sheet = XLSX.utils.json_to_sheet(rows.map(row => {
     const data = {}
+
+    if (row.constructor.name === 'Object') {
+      header.forEach(title => data[title] = ensureCell(row[title]))
+      return data
+    }
+
     for (const [idx, cell] of row.entries()) {
-      data[header[idx]] = cell
+      data[header[idx]] = ensureCell(cell)
     }
     return data
   }), { header: header })

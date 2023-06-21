@@ -1,6 +1,6 @@
-import uuidv4 from 'https://cdn.jsdelivr.net/npm/uuid@8.3.2/dist/esm-browser/v4.js'
-import uuidv5 from 'https://cdn.jsdelivr.net/npm/uuid@8.3.2/dist/esm-browser/v5.js'
+import {uuidv4,uuidv5} from './dep.js'
 
+export function uint8ArrayConcat(t,e){e||(e=t.reduce((t,e)=>t+e.length,0));const n=new Uint8Array(e);let c=0;for(const e of t)n.set(e,c),c+=e.length;return n}
 export function log(text) {
   console.log(text)
 }
